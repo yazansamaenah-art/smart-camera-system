@@ -1,4 +1,0 @@
-allow_event_types: [traffic_violation, presence, air_quality]
-deny_event_types: []
-redact_fields:
-  - 'payload.plates[*].text'
