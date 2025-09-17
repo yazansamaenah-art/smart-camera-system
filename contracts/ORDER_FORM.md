@@ -29,3 +29,5 @@ Signature: _______________________________
 **Authorized Signature (Provider)**  
 Name: Yazan Samaenah                     Date: ______________  
 Signature: _______________________________
+
+This Order incorporates the SmartPole EULA and (if applicable) the Master SOW.
