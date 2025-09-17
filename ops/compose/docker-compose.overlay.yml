@@ -1,0 +1,12 @@
+services:
+  kafka-worker:
+    build: { context: .., dockerfile: docker/worker.Dockerfile }
+    environment:
+      - CLOUD_SERVER=http://cloud:8000
+      - API_KEY=${API_KEY:-}
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - KAFKA_TOPIC=${KAFKA_TOPIC:-smartpole.events}
+    depends_on: [cloud]
+  fleet:
+    build: { context: .., dockerfile: docker/fleet.Dockerfile }
+    ports: ["8080:8080"]

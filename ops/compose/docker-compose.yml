@@ -1,0 +1,25 @@
+services:
+  cloud:
+    build: { context: .., dockerfile: docker/cloud.Dockerfile }
+    ports: ["8000:8000"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./smartpole.db}
+      - POLICY_FILE=cloud/policy/rules.yaml
+      - API_KEY=${API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - BLOBS_DIR=/app/blobs
+      - S3_BUCKET=${S3_BUCKET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-}
+      - GCS_BUCKET=${GCS_BUCKET:-}
+    volumes: [ "blobs:/app/blobs" ]
+  edge:
+    build: { context: .., dockerfile: docker/edge.Dockerfile }
+    depends_on: [cloud]
+    environment:
+      - SERVER_URL=http://cloud:8000
+      - PIPELINE_BACKEND=${PIPELINE_BACKEND:-opencv}
+      - API_KEY=${API_KEY:-}
+      - JWT_TOKEN=${JWT_TOKEN:-}
+volumes: { blobs: {} }
