@@ -1,6 +1,0 @@
-image:
-  repository: smartpole/cloud
-  tag: latest
-service:
-  type: ClusterIP
-  port: 8000
