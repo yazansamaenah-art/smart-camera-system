@@ -1,0 +1,457 @@
+# Create repo structure
+mkdir -p smartpole/edge/hal smartpole/edge/ai smartpole/cloud smartpole/policy smartpole/demo smartpole/ops/helm smartpole/models smartpole/ci
+
+# README.md
+cat > smartpole/README.md <<'EOF'
+# SmartPole — Unified Intelligent Camera Platform (skeleton)
+This is a development skeleton of the SmartPole project.  
+Includes edge runtime, cloud ingestion API, policy engine, demo harness, and ops (Docker/K8s).
+
+## Quick start
+
+### Edge (simulated device)
+cd edge
+python agent.py
+
+### Cloud API
+cd cloud
+python app.py
+
+### Demo run
+cd demo
+python run_demo.py
+EOF
+
+# edge/agent.py
+cat > smartpole/edge/agent.py <<'EOF'
+import time, random, requests
+from edge.hal.sensors import SensorSimulator
+from edge.ai.pipeline import AIPipeline
+
+CLOUD_URL = "http://localhost:5000/ingest"
+
+def main():
+    sensors = SensorSimulator()
+    pipeline = AIPipeline()
+
+    while True:
+        frame = sensors.capture_frame()
+        ai_results = pipeline.process(frame)
+        event = {
+            "timestamp": time.time(),
+            "location": sensors.gps(),
+            "ai_results": ai_results,
+        }
+        try:
+            requests.post(CLOUD_URL, json=event, timeout=2)
+            print("Event sent:", event)
+        except Exception as e:
+            print("Failed to send:", e)
+        time.sleep(2)
+
+if __name__ == "__main__":
+    main()
+EOF
+
+# edge/hal/sensors.py
+cat > smartpole/edge/hal/sensors.py <<'EOF'
+import random, time
+
+class SensorSimulator:
+    def capture_frame(self):
+        return {"raw_image": "FAKE_IMAGE_DATA", "objects": ["car", "pedestrian"]}
+
+    def gps(self):
+        return {"lat": 37.7749 + random.random()/1000, "lon": -122.4194 + random.random()/1000}
+
+    def air_quality(self):
+        return {"CO2": random.randint(350, 600), "PM2.5": random.randint(5, 50)}
+EOF
+
+# edge/ai/pipeline.py
+cat > smartpole/edge/ai/pipeline.py <<'EOF'
+import random
+
+class AIPipeline:
+    def process(self, frame):
+        return {
+            "license_plate": "ABC123" if "car" in frame["objects"] else None,
+            "pedestrians": frame["objects"].count("pedestrian"),
+            "speed": random.randint(20, 70),
+            "anomaly": random.choice([True, False]),
+        }
+EOF
+
+# cloud/app.py
+cat > smartpole/cloud/app.py <<'EOF'
+from flask import Flask, request, jsonify
+from cloud.storage import EventStore
+
+app = Flask(__name__)
+store = EventStore()
+
+@app.route("/ingest", methods=["POST"])
+def ingest():
+    data = request.json
+    store.add_event(data)
+    return jsonify({"status": "ok"})
+
+@app.route("/events")
+def events():
+    return jsonify(store.all_events())
+
+if __name__ == "__main__":
+    app.run(port=5000, debug=True)
+EOF
+
+# cloud/storage.py
+cat > smartpole/cloud/storage.py <<'EOF'
+class EventStore:
+    def __init__(self):
+        self.events = []
+
+    def add_event(self, event):
+        self.events.append(event)
+
+    def all_events(self):
+        return self.events
+EOF
+
+# policy/engine.py
+cat > smartpole/policy/engine.py <<'EOF'
+class PolicyEngine:
+    def __init__(self):
+        self.policies = []
+
+    def load_policy(self, policy):
+        self.policies.append(policy)
+
+    def evaluate(self, event):
+        results = []
+        for p in self.policies:
+            results.append((p["name"], p["rule"](event)))
+        return results
+
+# Example usage
+if __name__ == "__main__":
+    engine = PolicyEngine()
+    engine.load_policy({
+        "name": "Speed Limit",
+        "rule": lambda e: e["ai_results"]["speed"] <= 55
+    })
+    fake_event = {"ai_results": {"speed": 60}}
+    print(engine.evaluate(fake_event))
+EOF
+
+# demo/run_demo.py
+cat > smartpole/demo/run_demo.py <<'EOF'
+import requests
+
+def main():
+    r = requests.get("http://localhost:5000/events")
+    events = r.json()
+    print("Events in cloud store:")
+    for e in events:
+        print(e)
+
+if __name__ == "__main__":
+    main()
+EOF
+
+# ops/docker-compose.yml
+cat > smartpole/ops/docker-compose.yml <<'EOF'
+version: "3.8"
+services:
+  cloud:
+    build:
+      context: ../cloud
+      dockerfile: ../ops/Dockerfile.cloud
+    ports:
+      - "5000:5000"
+
+  edge:
+    build:
+      context: ../edge
+      dockerfile: ../ops/Dockerfile.edge
+    depends_on:
+      - cloud
+EOF
+
+# ops/Dockerfile.edge
+cat > smartpole/ops/Dockerfile.edge <<'EOF'
+FROM python:3.10
+WORKDIR /app
+COPY ../edge /app/edge
+COPY ../edge/agent.py /app/
+RUN pip install requests
+CMD ["python", "agent.py"]
+EOF
+
+# ops/Dockerfile.cloud
+cat > smartpole/ops/Dockerfile.cloud <<'EOF'
+FROM python:3.10
+WORKDIR /app
+COPY ../cloud /app/cloud
+COPY ../cloud/app.py /app/
+RUN pip install flask
+CMD ["python", "app.py"]
+EOF
+
+# ops/k8s-deployment.yml
+cat > smartpole/ops/k8s-deployment.yml <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smartpole-cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud
+  template:
+    metadata:
+      labels:
+        app: cloud
+    spec:
+      containers:
+      - name: cloud
+        image: smartpole-cloud:latest
+        ports:
+        - containerPort: 5000
+EOF
+
+# ops/helm/Chart.yaml
+cat > smartpole/ops/helm/Chart.yaml <<'EOF'
+apiVersion: v2
+name: smartpole
+version: 0.1.0
+description: Helm chart for SmartPole skeleton
+EOF
+
+# ops/helm/values.yaml
+cat > smartpole/ops/helm/values.yaml <<'EOF'
+replicaCount: 1
+image:
+  repository: smartpole-cloud
+  tag: latest
+service:
+  type: ClusterIP
+  port: 5000
+EOF
+
+# models/manifest.json
+cat > smartpole/models/manifest.json <<'EOF'
+{
+  "models": [
+    {
+      "name": "vehicle_detector",
+      "format": "onnx",
+      "version": "0.1",
+      "path": "vehicle_detector.onnx"
+    }
+  ]
+}
+EOF
+
+# ci/github-actions.yml
+cat > smartpole/ci/github-actions.yml <<'EOF'
+name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker images
+      run: docker-compose -f ops/docker-compose.yml build
+EOF
+
+# __init__.py files
+touch smartpole/edge/__init__.py smartpole/edge/hal/__init__.py smartpole/edge/ai/__init__.py smartpole/cloud/__init__.py smartpole/policy/__init__.py smartpole/demo/__init__.py
+
+
+-------------------------------------------------------------------------
+
+# Run cloud API
+cd smartpole/cloud
+python app.py
+
+# In another terminal, run edge agent
+cd ../edge
+python agent.py
+
+# In another terminal, run demo
+cd ../demo
+python run_demo.py
+
+-------------------------------------------------------------------------
+
+  demo:
+    build:
+      context: ./demo
+      dockerfile: ../ops/Dockerfile.demo
+    depends_on:
+      - cloud
+
+And create ops/Dockerfile.demo:
+FROM python:3.10
+WORKDIR /app
+COPY ../demo /app/demo
+RUN pip install requests
+CMD ["python", "run_demo.py"]
+
+Then re-run
+docker-compose -f ops/docker-compose.yml up --build
+
+--------------------------------------------------------------------------
+
+I’ve prepared a fully ready-to-run Docker Compose setup for the SmartPole skeleton, including cloud API + edge agent + demo orchestrator.
+
+Here’s the updated ops/docker-compose.yml:
+version: "3.8"
+services:
+  cloud:
+    build:
+      context: ../cloud
+      dockerfile: ../ops/Dockerfile.cloud
+    ports:
+      - "5000:5000"
+    container_name: smartpole-cloud
+
+  edge:
+    build:
+      context: ../edge
+      dockerfile: ../ops/Dockerfile.edge
+    depends_on:
+      - cloud
+    container_name: smartpole-edge
+
+  demo:
+    build:
+      context: ../demo
+      dockerfile: ../ops/Dockerfile.demo
+    depends_on:
+      - cloud
+    container_name: smartpole-demo
+
+
+Dockerfile for demo (ops/Dockerfile.demo)
+
+FROM python:3.10
+WORKDIR /app
+COPY ../demo /app/demo
+RUN pip install requests
+CMD ["python", "run_demo.py"]
+
+-----------------------------------------------------------------
+How to run everything in one command:
+cd smartpole
+docker-compose -f ops/docker-compose.yml up --build
+
+-----------------------------------------------------------------
+ready-to-use setup using a helper script that launches each service in its own terminal window.
+
+#!/bin/bash
+# Run all SmartPole services in separate terminals
+
+# Detect OS for terminal command
+TERMINAL_CMD=""
+
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    TERMINAL_CMD="gnome-terminal --"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    TERMINAL_CMD="osascript -e 'tell application \"Terminal\" to do script"
+else
+    echo "Unsupported OS for auto terminals. Run manually with docker-compose."
+    exit 1
+fi
+
+# Linux example (gnome-terminal)
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    gnome-terminal -- bash -c "docker-compose -f ops/docker-compose.yml up cloud; exec bash"
+    gnome-terminal -- bash -c "docker-compose -f ops/docker-compose.yml up edge; exec bash"
+    gnome-terminal -- bash -c "docker-compose -f ops/docker-compose.yml up demo; exec bash"
+fi
+
+echo "All services should now be running in separate terminals."
+
+chmod +x run_all.sh
+
+./run_all.sh
+
+----------------------------------------------------------------------
+fully automated one-command script that:
+
+Builds all Docker images for cloud, edge, and demo.
+
+Launches them in a tmux session with split panes.
+
+Lets you monitor all logs independently.
+
+
+
+#!/bin/bash
+# SmartPole full build + tmux orchestrator
+
+SESSION="smartpole"
+
+# Check tmux
+if ! command -v tmux &> /dev/null
+then
+    echo "tmux not found. Install tmux and rerun."
+    exit 1
+fi
+
+# Build Docker images first
+echo "Building Docker images..."
+docker-compose -f ops/docker-compose.yml build
+
+# Kill previous tmux session if exists
+tmux kill-session -t $SESSION 2>/dev/null
+
+# Create new tmux session
+tmux new-session -d -s $SESSION
+
+# Pane 0: Cloud API
+tmux rename-window -t $SESSION:0 'cloud'
+tmux send-keys -t $SESSION:0 "docker-compose -f ops/docker-compose.yml up cloud" C-m
+
+# Split vertically: Pane 1 -> Edge agent
+tmux split-window -v -t $SESSION:0
+tmux send-keys -t $SESSION:0.1 "docker-compose -f ops/docker-compose.yml up edge" C-m
+
+# Split horizontally: Pane 2 -> Demo
+tmux split-window -h -t $SESSION:0.1
+tmux send-keys -t $SESSION:0.2 "docker-compose -f ops/docker-compose.yml up demo" C-m
+
+# Select first pane
+tmux select-pane -t 0
+
+# Attach session
+tmux attach-session -t $SESSION
+
+chmod +x run_all_tmux.sh
+
+./run_all_tmux.sh
+
+----------------------------------------------------------------------------------
+
+cleanup script that stops all containers and exits the tmux session cleanly.
+
+#!/bin/bash
+# SmartPole cleanup: stop Docker containers + tmux session
+
+SESSION="smartpole"
+
+echo "Stopping all Docker Compose services..."
+docker-compose -f ops/docker-compose.yml down
+
+echo "Killing tmux session if exists..."
+tmux kill-session -t $SESSION 2>/dev/null || true
+
+echo "All services stopped and tmux session closed."
+
+chmod +x stop_all.sh
+
+./stop_all.sh
+
