@@ -39,6 +39,8 @@ This Master SOW and any Orders are governed by the **laws of the State of Califo
 ## 11. Entire Agreement
 This Master SOW together with any Order Forms constitutes the entire agreement regarding its subject matter and supersedes prior discussions. Conflicts between an Order and this Master SOW are resolved in favor of this Master SOW unless the Order expressly states otherwise.
 
+**Related Terms.** Use of the Software is licensed under the SmartPole EULA.
+
 ---
 
 **Provider:**  
